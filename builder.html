@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WGP Package Builder</title>
+    <!-- JSZip CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-color: #f8fafc;
+            --text-sub: #94a3b8;
+            --border-color: #334155;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 640px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        p.description {
+            color: var(--text-sub);
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: rgba(15, 23, 42, 0.4);
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--accent-color);
+            background-color: rgba(99, 102, 241, 0.1);
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            color: var(--accent-color);
+        }
+
+        .drop-zone-text {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .drop-zone-hint {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            display: none;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+        }
+
+        .file-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .file-info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .file-info-label {
+            color: var(--text-sub);
+        }
+
+        .status-box {
+            display: none;
+            margin-bottom: 20px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .status-box.info {
+            background-color: rgba(99, 102, 241, 0.15);
+            border: 1px solid var(--accent-color);
+            color: #c7d2fe;
+        }
+
+        .status-box.success {
+            background-color: rgba(16, 185, 129, 0.15);
+            border: 1px solid var(--success-color);
+            color: #a7f3d0;
+        }
+
+        .status-box.error {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--danger-color);
+            color: #fecaca;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background-color: var(--accent-hover);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .signature-preview {
+            margin-top: 16px;
+            font-family: monospace;
+            background-color: #000;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: #38bdf8;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📦 WGP Builder</h1>
+        <p class="description">
+            既存のゲームZIPファイルをアップロードし、署名ファイル（<code>manifest.txt</code>）を自動付与して独自の <code>.wgp</code> パッケージを生成します。Godot・Unityなどの多重フォルダ構造にも対応しています。
+        </p>
+
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-zone-icon">📁</div>
+            <div class="drop-zone-text">ZIPファイルをドラッグ＆ドロップ</div>
+            <div class="drop-zone-hint">またはクリックして選択 (.zip)</div>
+            <input type="file" id="fileInput" accept=".zip">
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <div class="file-info-item">
+                <span class="file-info-label">ファイル名:</span>
+                <span id="fileName">-</span>
+            </div>
+            <div class="file-info-item">
+                <span class="file-info-label">サイズ:</span>
+                <span id="fileSize">-</span>
+            </div>
+        </div>
+
+        <div class="status-box" id="statusBox"></div>
+
+        <button class="btn" id="buildBtn" disabled>
+            <span>.wgp パッケージをビルド</span>
+        </button>
+
+        <div id="signatureContainer" style="display: none;">
+            <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 16px;">生成された署名 (manifest.txt):</p>
+            <div class="signature-preview" id="signaturePreview"></div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileNameEl = document.getElementById('fileName');
+        const fileSizeEl = document.getElementById('fileSize');
+        const statusBox = document.getElementById('statusBox');
+        const buildBtn = document.getElementById('buildBtn');
+        const signatureContainer = document.getElementById('signatureContainer');
+        const signaturePreview = document.getElementById('signaturePreview');
+
+        let selectedFile = null;
+
+        // ドラッグ＆ドロップイベント設定
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                showStatus('ZIP形式のファイルを選択してください。', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            fileNameEl.textContent = file.name;
+            fileSizeEl.textContent = formatBytes(file.size);
+            fileInfo.style.display = 'block';
+            buildBtn.disabled = false;
+            signatureContainer.style.display = 'none';
+            showStatus('準備完了。「.wgp パッケージをビルド」をクリックしてください。', 'info');
+        }
+
+        // 署名（803 + ランダム英数字）生成関数
+        function generateManifestSignature() {
+            const prefix = "803";
+            const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            let randomStr = "";
+            for (let i = 0; i < 32; i++) {
+                randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return prefix + randomStr;
+        }
+
+        // ビルド処理
+        buildBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            buildBtn.disabled = true;
+            showStatus('ZIPファイルを解析・解凍中...', 'info');
+
+            try {
+                // 1. JSZipで受け取ったZIPを読み込む
+                const zip = new JSZip();
+                const loadedZip = await zip.loadAsync(selectedFile);
+
+                // 2. index.html の存在チェック
+                const hasIndex = Object.keys(loadedZip.files).some(path => {
+                    const cleanPath = path.replace(/\\/g, '/');
+                    return cleanPath === 'index.html' || cleanPath.endsWith('/index.html');
+                });
+
+                if (!hasIndex) {
+                    showStatus('警告: ZIP内に index.html が見つかりませんでしたが、ビルドを継続します。', 'error');
+                }
+
+                showStatus('803 署名ファイル (manifest.txt) を生成・挿入中...', 'info');
+
+                // 3. manifest.txt（803 + ランダム文字列）作成と注入
+                const signature = generateManifestSignature();
+                loadedZip.file("manifest.txt", signature);
+
+                // 4. 再パッケージング
+                showStatus('.wgp パッケージを作成中...', 'info');
+                const content = await loadedZip.generateAsync({
+                    type: "blob",
+                    compression: "DEFLATE",
+                    compressionOptions: { level: 6 }
+                });
+
+                // 5. ダウンロード処理
+                const downloadName = selectedFile.name.replace(/\.zip$/i, '') + '.wgp';
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = downloadName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // 結果表示
+                showStatus(`ビルドが完了しました！「${downloadName}」のダウンロードを開始します。`, 'success');
+                signaturePreview.textContent = signature;
+                signatureContainer.style.display = 'block';
+
+            } catch (err) {
+                console.error(err);
+                showStatus(`ビルドエラー: ${err.message}`, 'error');
+            } finally {
+                buildBtn.disabled = false;
+            }
+        });
+
+        function showStatus(text, type) {
+            statusBox.textContent = text;
+            statusBox.className = `status-box ${type}`;
+            statusBox.style.display = 'block';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
